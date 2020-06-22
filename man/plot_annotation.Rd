@@ -4,9 +4,16 @@
 \alias{plot_annotation}
 \title{Annotate the final patchwork}
 \usage{
-plot_annotation(title = NULL, subtitle = NULL, caption = NULL,
-  tag_levels = NULL, tag_prefix = NULL, tag_suffix = NULL,
-  tag_sep = NULL, theme = NULL)
+plot_annotation(
+  title = NULL,
+  subtitle = NULL,
+  caption = NULL,
+  tag_levels = NULL,
+  tag_prefix = NULL,
+  tag_suffix = NULL,
+  tag_sep = NULL,
+  theme = NULL
+)
 }
 \arguments{
 \item{title, subtitle, caption}{Text strings to use for the various plot
@@ -64,7 +71,7 @@ p1 / (p2 | p3) +
   plot_annotation(tag_levels = 'A')
 
 # Add multilevel tagging to nested layouts
-p1 / (p2 | p3 + plot_layout(tag_level = 'new')) +
+p1 / ((p2 | p3) + plot_layout(tag_level = 'new')) +
   plot_annotation(tag_levels = c('A', '1'))
 
 }

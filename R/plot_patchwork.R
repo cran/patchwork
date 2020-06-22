@@ -234,7 +234,7 @@ simplify_gt.gtable <- function(gt) {
   panel_pos <- find_panel(gt)
   rows <- c(panel_pos$t, panel_pos$b)
   cols <- c(panel_pos$l, panel_pos$r)
-  if (!gt$respect && rows[1] == rows[2] && cols[1] == cols[2]) {
+  if (!gt$respect && rows[1] == rows[2] && cols[1] == cols[2] && !any(grepl('^strip-', gt$layout$name))) {
     gt$widths <- convertWidth(gt$widths, 'mm')
     gt$heights <- convertHeight(gt$heights, 'mm')
     return(gt)
@@ -284,6 +284,20 @@ simplify_free <- function(gt, gt_new, panels, rows, cols) {
     gt_new <- gtable_add_grob(gt_new, gt$grobs[bottom], gt$layout$t[bottom] - b_mod,
                               p_cols, gt$layout$b[bottom] - b_mod, z = gt$layout$z[bottom],
                               clip = gt$layout$clip[bottom], name = gt$layout$name[bottom])
+    t_strips <- grepl('^strip-t-', gt_new$layout$name)
+    if (any(t_strips)) {
+      gt_new$grobs[t_strips] <- lapply(gt_new$grobs[t_strips], function(g) {
+        g$vp <- viewport(y = 0, just = 'bottom', height = g$heights)
+        g
+      })
+    }
+    b_strips <- grepl('^strip-b-', gt_new$layout$name)
+    if (any(b_strips)) {
+      gt_new$grobs[b_strips] <- lapply(gt_new$grobs[b_strips], function(g) {
+        g$vp <- viewport(y = 1, just = 'top', height = g$heights)
+        g
+      })
+    }
   } else {
     for (i in seq_len(nrow(gt))) {
       if (i >= rows[1]) {
@@ -319,6 +333,20 @@ simplify_free <- function(gt, gt_new, panels, rows, cols) {
     gt_new <- gtable_add_grob(gt_new, gt$grobs[right], p_rows, gt$layout$l[right] - r_mod,
                               p_rows, gt$layout$r[right] - r_mod, z = gt$layout$z[right],
                               clip = gt$layout$clip[right], name = gt$layout$name[right])
+    l_strips <- grepl('^strip-l-', gt_new$layout$name)
+    if (any(l_strips)) {
+      gt_new$grobs[l_strips] <- lapply(gt_new$grobs[l_strips], function(g) {
+        g$vp <- viewport(x = 1, just = 'right', width = g$widths)
+        g
+      })
+    }
+    r_strips <- grepl('^strip-r-', gt_new$layout$name)
+    if (any(r_strips)) {
+      gt_new$grobs[r_strips] <- lapply(gt_new$grobs[r_strips], function(g) {
+        g$vp <- viewport(x = 0, just = 'left', width = g$widths)
+        g
+      })
+    }
   } else {
     for (i in seq_len(ncol(gt))) {
       if (i >= cols[1]) {
@@ -392,32 +420,56 @@ simplify_fixed <- function(gt, gt_new, panels, rows, cols) {
   for (i in seq_len(left - 1)) {
     table <- gt[p_rows, i]
     if (length(table$grobs) != 0) {
-      grobname <- paste(table$layout$name, collapse = ', ')
-      gt_new <- gtable_add_grob(gt_new, table, rows[1], i, clip = 'off', name = grobname, z = max(table$layout$z))
+      if (length(table$grobs) == 1) {
+        grobname <- table$layout$name
+        grob <- table$grobs[[1]]
+      } else {
+        grobname <- paste(table$layout$name, collapse = ', ')
+        grob <- table
+      }
+      gt_new <- gtable_add_grob(gt_new, grob, rows[1], i, clip = 'off', name = grobname, z = max(table$layout$z))
     }
   }
   right <- if (length(right) != 0) max(right) else cols[2]
   for (i in seq_len(ncol(gt) - right)) {
     table <- gt[p_rows, i + right]
     if (length(table$grobs) != 0) {
-      grobname <- paste(table$layout$name, collapse = ', ')
-      gt_new <- gtable_add_grob(gt_new, table, rows[1], i + cols[1] + right - cols[2], clip = 'off', name = grobname, z = max(table$layout$z))
+      if (length(table$grobs) == 1) {
+        grobname <- table$layout$name
+        grob <- table$grobs[[1]]
+      } else {
+        grobname <- paste(table$layout$name, collapse = ', ')
+        grob <- table
+      }
+      gt_new <- gtable_add_grob(gt_new, grob, rows[1], i + cols[1] + right - cols[2], clip = 'off', name = grobname, z = max(table$layout$z))
     }
   }
   top <- if (length(top) != 0) min(top) else rows[1]
   for (i in seq_len(top - 1)) {
     table <- gt[i, p_cols]
     if (length(table$grobs) != 0) {
-      grobname <- paste(table$layout$name, collapse = ', ')
-      gt_new <- gtable_add_grob(gt_new, table, i, cols[1], clip = 'off', name = grobname, z = max(table$layout$z))
+      if (length(table$grobs) == 1) {
+        grobname <- table$layout$name
+        grob <- table$grobs[[1]]
+      } else {
+        grobname <- paste(table$layout$name, collapse = ', ')
+        grob <- table
+      }
+      gt_new <- gtable_add_grob(gt_new, grob, i, cols[1], clip = 'off', name = grobname, z = max(table$layout$z))
     }
   }
   bottom <- if (length(bottom) != 0) max(bottom) else rows[2]
   for (i in seq_len(nrow(gt) - bottom)) {
     table <- gt[i + bottom, p_cols]
     if (length(table$grobs) != 0) {
-      grobname <- paste(table$layout$name, collapse = ', ')
-      gt_new <- gtable_add_grob(gt_new, table, i + rows[1] + bottom - rows[2], cols[1], clip = 'off', name = grobname, z = max(table$layout$z))
+      if (length(table$grobs) == 1) {
+        grobname <- table$layout$name
+        grob <- table$grobs[[1]]
+      } else {
+        grobname <- paste(table$layout$name, collapse = ', ')
+        grob <- table
+      }
+      gt_new <- gtable_add_grob(gt_new, grob, i + rows[1] + bottom - rows[2], cols[1], clip = 'off', name = grobname, z = max(table$layout$z))
     }
   }
   panel_name <- paste0('panel; ', paste(panels$layout$name, collapse = ', '))
@@ -444,7 +496,7 @@ table_dims <- function(widths, heights, areas, ncol, nrow) {
     if (length(tables) == 0) {
       0
     } else {
-      max(vapply(widths[tables], `[[`, numeric(1), col_loc))
+      max(vapply(widths[tables], `[[`, numeric(1), col_loc), 0)
     }
   }, numeric(1))
   heights <- lapply(heights, convertHeight, 'mm', valueOnly = TRUE)
@@ -457,7 +509,7 @@ table_dims <- function(widths, heights, areas, ncol, nrow) {
     if (length(tables) == 0) {
       0
     } else {
-      max(vapply(heights[tables], `[[`, numeric(1), row_loc))
+      max(vapply(heights[tables], `[[`, numeric(1), row_loc), 0)
     }
   }, numeric(1))
   list(widths = unit(widths, 'mm'), heights = unit(heights, 'mm'))
@@ -518,27 +570,39 @@ add_strips <- function(gt) {
   )
   if (!any(grepl('strip-b', gt$layout$name))) {
     gt <- gtable_add_rows(gt, unit(0, 'mm'), panel_loc$b + strip_pos)
+  } else if (strip_pos == 2) {
+    gt$heights[panel_loc$b + 1] <- sum(gt$heights[panel_loc$b + c(1, 2)])
+    gt <- gt[-(panel_loc$b + 2), ]
   }
   if (!any(grepl('strip-t', gt$layout$name))) {
     gt <- gtable_add_rows(gt, unit(0, 'mm'), panel_loc$t - 1 - strip_pos)
+  } else if (strip_pos == 2) {
+    gt$heights[panel_loc$t - 1] <- sum(gt$heights[panel_loc$t - c(1, 2)])
+    gt <- gt[-(panel_loc$t - 2), ]
   }
   if (!any(grepl('strip-r', gt$layout$name))) {
     gt <- gtable_add_cols(gt, unit(0, 'mm'), panel_loc$r + strip_pos)
+  } else if (strip_pos == 2) {
+    gt$widths[panel_loc$r + 1] <- sum(gt$widths[panel_loc$r + c(1, 2)])
+    gt <- gt[, -(panel_loc$r + 2)]
   }
   if (!any(grepl('strip-l', gt$layout$name))) {
     gt <- gtable_add_cols(gt, unit(0, 'mm'), panel_loc$l - 1 - strip_pos)
+  } else if (strip_pos == 2) {
+    gt$widths[panel_loc$l - 1] <- sum(gt$widths[panel_loc$l - c(1, 2)])
+    gt <- gt[, -(panel_loc$l - 2)]
   }
   gt
 }
 #' @importFrom gtable gtable_add_rows gtable_add_cols
 #' @importFrom grid unit
 add_guides <- function(gt, collect = FALSE) {
-  panel_loc <- find_panel(gt)
+  panel_loc <- find_panel(gt)[, c('t', 'l', 'b', 'r')]
   guide_ind <- which(gt$layout$name == 'guide-box')
-  guide_loc <- gt$layout[guide_ind, ]
+  guide_loc <- gt$layout[guide_ind, c('t', 'l', 'b', 'r')]
   guide_pos <- if (nrow(guide_loc) == 0) {
     'none'
-  } else if (all(unlist(guide_loc[, c('t', 'l', 'b', 'r')] == panel_loc))) {
+  } else if (all(unlist(guide_loc == panel_loc))) {
     'inside'
   } else {
     if (panel_loc$t == guide_loc$t) {
@@ -624,16 +688,21 @@ set_panel_dimensions <- function(gt, panels, widths, heights, fixed_asp, design)
       )
     })
     can_fix <- vapply(fixed_areas, function(x) length(x$rows) == 1 && length(x$cols), logical(1))
-    can_fix_row <- vapply(fixed_areas, function(x) all(height_strings[x$rows] == '-1null'), logical(1))
-    can_fix_col <- vapply(fixed_areas, function(x) all(width_strings[x$cols] == '-1null'), logical(1))
+    can_fix_row <- vapply(fixed_areas, function(x) all(grepl('null$', height_strings[x$rows])), logical(1))
+    can_fix_col <- vapply(fixed_areas, function(x) all(grepl('null$', width_strings[x$cols])), logical(1))
     fixed_areas <- fixed_areas[can_fix & (can_fix_row & can_fix_col)]
     fixed_gt <- which(fixed_asp)[can_fix & (can_fix_row & can_fix_col)]
-    for (i in seq_along(fixed_areas)) {
+    all_fixed_rows <- table(unlist(lapply(fixed_areas, `[[`, 'rows')))
+    all_fixed_cols <- table(unlist(lapply(fixed_areas, `[[`, 'cols')))
+    controls_dim <- vapply(fixed_areas, function(a) {
+      all(all_fixed_rows[as.character(a$rows)] == 1) || all(all_fixed_rows[as.character(a$cols)] == 1)
+    }, logical(1))
+    for (i in order(controls_dim)) {
       panel_ind <- grep('panel', panels[[fixed_gt[i]]]$layout$name)[1]
       w <- panels[[fixed_gt[i]]]$grobs[[panel_ind]]$widths
       h <- panels[[fixed_gt[i]]]$grobs[[panel_ind]]$heights
-      can_set_width <- width_strings[fixed_areas[[i]]$cols] == '-1null'
-      can_set_height <- height_strings[fixed_areas[[i]]$rows] == '-1null'
+      can_set_width <- width_strings[fixed_areas[[i]]$cols] == '-1null' && length(w) == 1 && length(h) == 1
+      can_set_height <- height_strings[fixed_areas[[i]]$rows] == '-1null' && length(w) == 1 && length(h) == 1
       will_be_fixed <- TRUE
       if (can_set_width && can_set_height) {
         widths[fixed_areas[[i]]$cols] <- w
