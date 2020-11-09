@@ -107,23 +107,24 @@ build_patchwork <- function(x, guides = 'auto') {
   fixed_asp <- vapply(gt, function(x) isTRUE(x$respect), logical(1))
   guide_grobs <- unlist(lapply(gt, `[[`, 'collected_guides'), recursive = FALSE)
   gt <- lapply(gt, simplify_gt)
-  if (!is.null(x$layout$design)) {
-    if (is.null(x$layout$ncol)) x$layout$ncol <- max(x$layout$design$r)
-    if (is.null(x$layout$nrow)) x$layout$nrow <- max(x$layout$design$b)
-  }
-  if (is.null(x$layout$ncol) && !is.null(x$layout$widths) && length(x$layout$widths) > 1) {
-    x$layout$ncol <- length(x$layout$widths)
-  }
-  if (is.null(x$layout$nrow) && !is.null(x$layout$heights) && length(x$layout$heights) > 1) {
-    x$layout$nrow <- length(x$layout$heights)
-  }
-  dims <- wrap_dims(length(x$plots), nrow = x$layout$nrow, ncol = x$layout$ncol)
-  gt_new <- gtable(unit(rep(0, TABLE_COLS * dims[2]), 'null'),
-                   unit(rep(0, TABLE_ROWS * dims[1]), 'null'))
+  gt <- add_insets(gt)
   if (is.null(x$layout$design)) {
+    if (is.null(x$layout$ncol) && !is.null(x$layout$widths) && length(x$layout$widths) > 1) {
+      x$layout$ncol <- length(x$layout$widths)
+    }
+    if (is.null(x$layout$nrow) && !is.null(x$layout$heights) && length(x$layout$heights) > 1) {
+      x$layout$nrow <- length(x$layout$heights)
+    }
+    dims <- wrap_dims(length(gt), nrow = x$layout$nrow, ncol = x$layout$ncol)
     x$layout$design <- create_design(dims[2], dims[1], x$layout$byrow)
   } else {
+    dims <- c(
+      max(x$layout$design$b),
+      max(x$layout$design$r)
+    )
   }
+  gt_new <- gtable(unit(rep(0, TABLE_COLS * dims[2]), 'null'),
+                   unit(rep(0, TABLE_ROWS * dims[1]), 'null'))
   design <- as.data.frame(unclass(x$layout$design))
   if (nrow(design) < length(gt)) {
     warning('Too few patch areas to hold all plots. Dropping plots', call. = FALSE)
@@ -141,6 +142,7 @@ build_patchwork <- function(x, guides = 'auto') {
   gt_new$layout <- do.call(rbind, lapply(seq_along(gt), function(i) {
     loc <- design[i, ]
     lay <- gt[[i]]$layout
+    lay$name <- paste0(lay$name, '-', i)
     lay$t <- lay$t + ifelse(lay$t <= PANEL_ROW, (loc$t - 1) * TABLE_ROWS, (loc$b - 1) * TABLE_ROWS)
     lay$l <- lay$l + ifelse(lay$l <= PANEL_COL, (loc$l - 1) * TABLE_COLS, (loc$r - 1) * TABLE_COLS)
     lay$b <- lay$b + ifelse(lay$b < PANEL_ROW, (loc$t - 1) * TABLE_ROWS, (loc$b - 1) * TABLE_ROWS)
@@ -223,6 +225,19 @@ plot_table.patchwork <- function(x, guides) {
 plot_table.patch <- function(x, guides) {
   patchGrob(x, guides)
 }
+#' @export
+plot_table.inset_patch <- function(x, guides) {
+  settings <- attr(x, 'settings')
+  class(x) <- setdiff(class(x), 'inset_patch')
+  table <- plot_table(x, guides)
+  table$vp <- viewport(x = settings$left, y = settings$bottom,
+                       width = settings$right - settings$left,
+                       height = settings$top - settings$bottom,
+                       just = c(0, 0))
+  attr(table, 'settings') <- settings
+  class(table) <- c('inset_table', class(table))
+  table
+}
 simplify_gt <- function(gt) {
   UseMethod('simplify_gt')
 }
@@ -269,8 +284,10 @@ simplify_gt.gtable_patchwork <- function(gt) {
 }
 #' @export
 simplify_gt.patchgrob <- function(gt) gt
+#' @export
+simplify_gt.inset_table <- function(gt) gt
 
-#' @importFrom gtable gtable_add_grob
+#' @importFrom gtable gtable_add_grob is.gtable
 #' @importFrom grid viewport
 simplify_free <- function(gt, gt_new, panels, rows, cols) {
   p_cols <- seq(cols[1], cols[2])
@@ -287,14 +304,18 @@ simplify_free <- function(gt, gt_new, panels, rows, cols) {
     t_strips <- grepl('^strip-t-', gt_new$layout$name)
     if (any(t_strips)) {
       gt_new$grobs[t_strips] <- lapply(gt_new$grobs[t_strips], function(g) {
-        g$vp <- viewport(y = 0, just = 'bottom', height = g$heights)
+        if (is.gtable(g)) {
+          g$vp <- viewport(y = 0, just = 'bottom', height = g$heights)
+        }
         g
       })
     }
     b_strips <- grepl('^strip-b-', gt_new$layout$name)
     if (any(b_strips)) {
       gt_new$grobs[b_strips] <- lapply(gt_new$grobs[b_strips], function(g) {
-        g$vp <- viewport(y = 1, just = 'top', height = g$heights)
+        if (is.gtable(g)) {
+          g$vp <- viewport(y = 1, just = 'top', height = g$heights)
+        }
         g
       })
     }
@@ -336,14 +357,18 @@ simplify_free <- function(gt, gt_new, panels, rows, cols) {
     l_strips <- grepl('^strip-l-', gt_new$layout$name)
     if (any(l_strips)) {
       gt_new$grobs[l_strips] <- lapply(gt_new$grobs[l_strips], function(g) {
-        g$vp <- viewport(x = 1, just = 'right', width = g$widths)
+        if (is.gtable(g)) {
+          g$vp <- viewport(x = 1, just = 'right', width = g$widths)
+        }
         g
       })
     }
     r_strips <- grepl('^strip-r-', gt_new$layout$name)
     if (any(r_strips)) {
       gt_new$grobs[r_strips] <- lapply(gt_new$grobs[r_strips], function(g) {
-        g$vp <- viewport(x = 0, just = 'left', width = g$widths)
+        if (is.gtable(g)) {
+          g$vp <- viewport(x = 0, just = 'left', width = g$widths)
+        }
         g
       })
     }
@@ -598,7 +623,7 @@ add_strips <- function(gt) {
 #' @importFrom grid unit
 add_guides <- function(gt, collect = FALSE) {
   panel_loc <- find_panel(gt)[, c('t', 'l', 'b', 'r')]
-  guide_ind <- which(gt$layout$name == 'guide-box')
+  guide_ind <- which(grepl('guide-box', gt$layout$name))
   guide_loc <- gt$layout[guide_ind, c('t', 'l', 'b', 'r')]
   guide_pos <- if (nrow(guide_loc) == 0) {
     'none'
@@ -642,7 +667,7 @@ add_guides <- function(gt, collect = FALSE) {
     }
     gt$grobs[guide_ind] <- NULL
     gt$layout <- gt$layout[-guide_ind, ]
-    gt$collected_guides <- guide_grob$grobs[guide_grob$layout$name == 'guides']
+    gt$collected_guides <- guide_grob$grobs[grepl('guides', guide_grob$layout$name)]
   }
   gt
 }
@@ -730,4 +755,42 @@ set_panel_dimensions <- function(gt, panels, widths, heights, fixed_asp, design)
   gt$widths[width_ind] <- widths
   gt$heights[height_ind] <- heights
   gt
+}
+
+add_insets <- function(gt) {
+  is_inset <- vapply(gt, inherits, logical(1), 'inset_table')
+  if (!any(is_inset)) {
+    return(gt)
+  }
+  canvas <- rank(cumsum(!is_inset), ties.method = "min")[is_inset]
+  if (canvas[1] == 0) {
+    stop("insets cannot be the first plot in a patchwork", call. = FALSE)
+  }
+  insets <- which(is_inset)
+  name <- paste0('inset_', insets)
+  for (i in seq_along(insets)) {
+    ins <- gt[[insets[i]]]
+    can <- gt[[canvas[i]]]
+    setting <- attr(ins, 'settings')
+    if (setting$on_top) {
+      z <- max(can$layout$z) + 1
+    } else {
+      bg <- which(grepl('background', can$layout$name))
+      if (length(bg) != 0) {
+        z <- can$layout$z[bg[1]]
+      } else {
+        z <- min(can$layout$z) - 1
+      }
+    }
+    gt[[canvas[i]]] <- switch(setting$align_to,
+           panel = gtable_add_grob(can, list(ins), PANEL_ROW, PANEL_COL, z = z,
+                                   clip = setting$clip, name = name[i]),
+           plot = gtable_add_grob(can, list(ins), PLOT_TOP, PLOT_LEFT, PLOT_BOTTOM,
+                                  PLOT_RIGHT, z = z, clip =  setting$clip, name = name[i]),
+           full = gtable_add_grob(can, list(ins), 1, 1, nrow(can), ncol(can), z = z,
+                                  clip = setting$clip, name = name[i]),
+           stop('Unknown alignment setting: `', setting$align_to, '`', call. = FALSE)
+    )
+  }
+  gt[!is_inset]
 }
