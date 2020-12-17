@@ -90,6 +90,30 @@ plot.patchwork <- print.patchwork
   }
   x
 }
+#' @importFrom utils str
+#' @export
+str.patchwork <- function(object, ...) {
+  n_patches <- length(object$patches$plots)
+  if (!is_empty(object)) n_patches <- n_patches + 1
+  cat('A patchwork composed of ', n_patches, ' patches\n', sep = '')
+  cat('- Autotagging is turned ', if (is.null(object$patches$annotation$tag_levels)) 'off' else 'on', '\n', sep = '')
+  cat('- Guides are ', if (isTRUE(object$patches$layout$guides == 'collect')) 'collected' else 'kept', '\n', sep = '')
+  cat('\n')
+  cat('Layout:\n')
+  if (is.null(object$layout$design)) {
+    l <- object$layout
+    if (is.null(l$ncol) && !is.null(l$widths) && length(l$widths) > 1) {
+      l$ncol <- length(l$widths)
+    }
+    if (is.null(l$nrow) && !is.null(l$heights) && length(l$heights) > 1) {
+      l$nrow <- length(l$heights)
+    }
+    dims <- wrap_dims(n_patches, nrow = l$nrow, ncol = l$ncol)
+    print(create_design(dims[2], dims[1], isTRUE(l$byrow)))
+  } else {
+    print(object$layout$design)
+  }
+}
 #' @importFrom ggplot2 ggplot_build ggplot_gtable panel_rows panel_cols wrap_dims
 #' @importFrom gtable gtable
 #' @importFrom grid unit unit.pmax is.unit
@@ -104,10 +128,10 @@ build_patchwork <- function(x, guides = 'auto') {
     x$layout$guides
   }
   gt <- lapply(x$plots, plot_table, guides = guides)
-  fixed_asp <- vapply(gt, function(x) isTRUE(x$respect), logical(1))
   guide_grobs <- unlist(lapply(gt, `[[`, 'collected_guides'), recursive = FALSE)
   gt <- lapply(gt, simplify_gt)
   gt <- add_insets(gt)
+  fixed_asp <- vapply(gt, function(x) isTRUE(x$respect), logical(1))
   if (is.null(x$layout$design)) {
     if (is.null(x$layout$ncol) && !is.null(x$layout$widths) && length(x$layout$widths) > 1) {
       x$layout$ncol <- length(x$layout$widths)
@@ -116,7 +140,7 @@ build_patchwork <- function(x, guides = 'auto') {
       x$layout$nrow <- length(x$layout$heights)
     }
     dims <- wrap_dims(length(gt), nrow = x$layout$nrow, ncol = x$layout$ncol)
-    x$layout$design <- create_design(dims[2], dims[1], x$layout$byrow)
+    x$layout$design <- create_design(dims[2], dims[1], isTRUE(x$layout$byrow))
   } else {
     dims <- c(
       max(x$layout$design$b),
