@@ -225,6 +225,22 @@ build_patchwork <- function(x, guides = 'auto') {
     gt_new$collected_guides <- guide_grobs
   }
 
+  axes <- x$layout$axes %||% default_layout$axes
+  if (axes %in% c('collect', 'collect_x')) {
+    gt_new <- collect_axes(gt_new, "x")
+  }
+  if (axes %in% c('collect', 'collect_y')) {
+    gt_new <- collect_axes(gt_new, "y")
+  }
+
+  titles <- x$layout$axis_titles %||% default_layout$axis_titles
+  if (titles %in% c('collect', 'collect_x')) {
+    gt_new <- collect_axis_titles(gt_new, "x", merge = TRUE)
+  }
+  if (titles %in% c('collect', 'collect_y')) {
+    gt_new <- collect_axis_titles(gt_new, "y", merge = TRUE)
+  }
+
   gt_new <- gtable_add_grob(
     gt_new, zeroGrob(),
     t = PANEL_ROW,
@@ -294,6 +310,39 @@ plot_table.inset_patch <- function(x, guides) {
                        just = c(0, 0))
   attr(table, 'settings') <- settings
   class(table) <- c('inset_table', class(table))
+  table
+}
+#' @export
+plot_table.free_plot <- function(x, guides) {
+  gt <- NextMethod()
+  collected_guides <- gt$collected_guides
+  gt$collected_guides <- NULL
+  table <- patch_table(make_patch(), gt)
+
+  # Make sure tag remains aligned
+  table$widths[c(2, ncol(table)-1)] <- gt$widths[c(2, ncol(gt)-1)]
+  table$heights[c(2, nrow(table)-1)] <- gt$heights[c(2, nrow(gt)-1)]
+  tag <- get_grob(gt, 'tag')
+  tag_pos <- x$theme$plot.tag.position
+  if (is.null(tag_pos)) tag_pos <- theme_get()$plot.tag.position
+  if (!is_zero(tag) && is.character(tag_pos)) {
+    table <- switch(
+      tag_pos,
+      topleft = gtable_add_grob(table, tag, name = "tag", t = 2, l = 2, clip = "off"),
+      top = gtable_add_grob(table, tag, name = "tag", t = 2, l = 2, r = ncol(table)-1, clip = "off"),
+      topright = gtable_add_grob(table, tag, name = "tag", t = 2, l = ncol(table)-1, clip = "off"),
+      left = gtable_add_grob(table, tag, name = "tag", t = 2, b = nrow(table)-1, l = 2, clip = "off"),
+      right = gtable_add_grob(table, tag, name = "tag", t = 2, b = nrow(table)-1, l = ncol(table)-1, clip = "off"),
+      bottomleft = gtable_add_grob(table, tag, name = "tag", t = nrow(table)-1, l = 2, clip = "off"),
+      bottom = gtable_add_grob(table, tag, name = "tag", t = nrow(table)-1, l = 2, r = ncol(table)-1, clip = "off"),
+      bottomright = gtable_add_grob(table, tag, name = "tag", t = nrow(table)-1, l = ncol(table)-1, clip = "off")
+    )
+  }
+
+  gt <- gt[seq_len(nrow(gt) - 4) + 2, seq_len(ncol(gt) - 4) + 2]
+  table <- gtable_add_grob(table, list(gt), PLOT_TOP, PLOT_LEFT, PLOT_BOTTOM,
+                           PLOT_RIGHT, clip = 'on', name = 'free_plot')
+  table$collected_guides <- collected_guides
   table
 }
 simplify_gt <- function(gt) {
@@ -673,7 +722,7 @@ add_strips <- function(gt) {
   }
   if (!any(grepl('strip-l', gt$layout$name))) {
     gt <- gtable_add_cols(gt, unit(0, 'mm'), panel_loc$l - 1 - strip_pos)
-  } else if (strip_pos == 2) {
+  } else if (strip_pos == 2 && !any(gt$layout$l == panel_loc$l - 2)) {
     gt$widths[panel_loc$l - 1] <- sum(gt$widths[panel_loc$l - c(1, 2)])
     gt <- gt[, -(panel_loc$l - 2)]
   }
@@ -684,6 +733,39 @@ add_strips <- function(gt) {
 add_guides <- function(gt, collect = FALSE) {
   panel_loc <- find_panel(gt)[, c('t', 'l', 'b', 'r')]
   guide_ind <- which(grepl('guide-box', gt$layout$name))
+
+  if (length(guide_ind) == 5) {
+    # For ggplot2 >3.5.0, we don't need to add extra space for missing legends,
+    # as every position already has relevant cells in the gtable.
+    if (!collect) {
+      return(gt)
+    }
+    # We need to collect guides from multiple cells in the gtable instead.
+    guide_loc <- gt$layout[guide_ind, ]
+    guide_pos <- gsub("guide-box-", "", guide_loc$name)
+
+    # Set space for guides to zero
+    space_pos <- ifelse(guide_pos %in% c('left', 'top'), 1L, -1L)
+    lr  <- guide_pos %in% c('left', 'right')
+    col <- guide_loc$l[lr]
+    gt$widths[c(col, col + space_pos[lr])] <- unit(0, "mm")
+    tb  <- guide_pos %in% c('top', 'bottom')
+    row <- guide_loc$t[tb]
+    gt$heights[c(row, row + space_pos[tb])] <- unit(0, "mm")
+
+    # Collect guides
+    collection <- lapply(gt$grobs[guide_ind], function(box) {
+      box$grobs[grepl('guides', box$layout$name)] # NULL if legend is empty
+    })
+    collection <- unlist(collection, recursive = FALSE) # drops NULL
+    gt$collected_guides <- collection
+
+    # Remove guides from gtable
+    gt$grobs[guide_ind] <- NULL
+    gt$layout <- gt$layout[-guide_ind, ]
+    return(gt)
+  }
+
   guide_loc <- gt$layout[guide_ind, c('t', 'l', 'b', 'r')]
   guide_pos <- if (nrow(guide_loc) == 0) {
     'none'
