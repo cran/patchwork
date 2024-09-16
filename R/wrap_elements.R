@@ -16,8 +16,8 @@
 #' geoms, etc.. When grobs and formulas are added directly, they will implicitly
 #' be converted to `wrap_elements(full = x)`.
 #'
-#' @param panel,plot,full A grob, ggplot, patchwork, formula, raster, or
-#' nativeRaster object to add to the respective area.
+#' @param panel,plot,full A grob, ggplot, patchwork, formula, raster,
+#' nativeRaster, or gt object to add to the respective area.
 #'
 #' @param clip Should the grobs be clipped if expanding outside its area
 #'
@@ -65,7 +65,7 @@ wrap_elements <- function(panel = NULL, plot = NULL, full = NULL, clip = TRUE, i
   clip <- if (clip) 'on' else 'off'
   table <- make_patch()
   attr(table, 'grobs') <- list(panel = panel, plot = plot, full = full)
-  attr(table, 'settings') <- list(clip = clip, ignore_tag = ignore_tag)
+  attr(table, 'patch_settings') <- list(clip = clip, ignore_tag = ignore_tag)
   class(table) <- c('wrapped_patch', class(table))
   table
 }
@@ -77,7 +77,7 @@ is_wrapped_patch <- function(x) inherits(x, 'wrapped_patch')
 patchGrob.wrapped_patch <- function(x, guides = 'auto') {
   gt <- ggplotGrob(x)
   table <- patch_table(x, gt)
-  settings <- attr(x, 'settings')
+  settings <- attr(x, 'patch_settings')
   grobs <- attr(x, 'grobs')
   if (!is.null(grobs$full)) {
     table <- gtable_add_grob(table, list(as_patch(grobs$full)), 1, 1, nrow(table),
@@ -108,7 +108,7 @@ patchGrob.wrapped_patch <- function(x, guides = 'auto') {
     table$widths[c(2, ncol(table)-1)] <- gt$widths[c(2, ncol(gt)-1)]
     table$heights[c(2, nrow(table)-1)] <- gt$heights[c(2, nrow(gt)-1)]
     tag <- get_grob(gt, 'tag')
-    tag_pos <- x$theme$plot.tag.position
+    tag_pos <- calc_element("plot.tag.position", x$theme %||% theme_get())
     if (is.null(tag_pos)) tag_pos <- theme_get()$plot.tag.position
     if (!is.character(tag_pos)) tag_pos <- 'manual'
     table <- switch(
@@ -189,4 +189,4 @@ offscreen_dev <- function() {
   }
 }
 #' @export
-has_tag.wrapped_patch <- function(x) !attr(x, 'settings')$ignore_tag
+has_tag.wrapped_patch <- function(x) !attr(x, 'patch_settings')$ignore_tag

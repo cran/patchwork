@@ -2,29 +2,44 @@
 % Please edit documentation in R/free.R
 \name{free}
 \alias{free}
-\title{Free a plot from alignment}
+\title{Free a plot from various alignments}
 \usage{
-free(x)
+free(x, type = c("panel", "label", "space"), side = "trbl")
 }
 \arguments{
 \item{x}{A ggplot or patchwork object}
+
+\item{type}{Which type of freeing should be applied. See the Details section}
+
+\item{side}{Which side should the freeing be applied to. A string containing
+one or more of "t", "r", "b", and "l"}
 }
 \value{
 A modified version of \code{x} with a \code{free_plot} class
 }
 \description{
-While the purpose of patchwork is often to align plots by their panels,
+While the purpose of patchwork is often to align plots by their various parts,
 sometimes this doesn't cut it and we want to compose plots without alignment.
 The \code{free()} function tells patchwork to treat the content (which can either
 be a ggplot or a patchwork) specially and not align it with the remaining
-panels in the composition. It works much like using \code{\link[=wrap_elements]{wrap_elements()}} but has
-a few niceties. For starter, it is less verbose, both with a shorter name,
-but also without the need to use the \code{full} argument rather than the first.
-Second, A plot wrapped with \code{free()} retains all of it's behavior from
-before. You can still add stuff to it, change it's theme, etc., but more
-importantly you can still collect guides and recurse tags as usual. A further
-nicety is that margins of the plot behave as expected and is aligned with the
-other plots in the composition.
+plots in the composition. \code{free()} has various modes to control what type of
+"non-alignment" is applied (see Details). Further you can control which side
+of the plot the non-alignment is applied to. You can stack \code{free()} calls if
+you e.g. want the top part to not align to the panel and the left part to not
+align to the labels.
+}
+\details{
+\code{free()} has multiple modes depending on what you are needing:
+
+The default \code{"panel"} will allow the panel area to ignore alginment with the
+remaining plots and expand as much as needed to fill any empty space.
+
+The \code{"label"} type will instead free the axis label to keep its proximity to
+the axis, even if a longer axis text from another plot would push them apart.
+
+The \code{"space"} type also keeps axis and title together, but will instead not
+reserve any space for it. This allows the axis to occupy space in an
+otherwise empty area without making additional space available for itself.
 }
 \examples{
 # Sometimes you have a plot that defies good composition alginment, e.g. due
@@ -44,10 +59,24 @@ p2 <- ggplot(mtcars) + geom_point(aes(mpg, disp))
 
 p1 / p2
 
-# We can fix this be using free
+# We can fix this be using free (here, with the default "panel" type)
 free(p1) / p2
+
+# If we still want the panels to be aligned to the right, we can choose to
+# free only the left side
+free(p1, side = "l") / p2
 
 # We can still collect guides like before
 free(p1) / p2 + plot_layout(guides = "collect")
+
+# We could use "label" to fix the layout in a different way
+p1 / free(p2, "label")
+
+# Another issue is that long labels are not using already available free
+# space.
+plot_spacer() + p1 + p2 + p2
+
+# This can be fixed with the "space" type
+plot_spacer() + free(p1, "space", "l") + p2 + p2
 
 }

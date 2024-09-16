@@ -7,6 +7,7 @@ ggplot_add.ggplot <- function(object, plot, object_name) {
 #' @importFrom ggplot2 ggplot_add
 #' @export
 ggplot_add.grob <- function(object, plot, object_name) {
+  table <- as_patch(object)
   plot + wrap_elements(full = object)
 }
 #' @importFrom ggplot2 ggplot_add
@@ -18,6 +19,11 @@ ggplot_add.raster <- ggplot_add.grob
 #' @importFrom ggplot2 ggplot_add
 #' @export
 ggplot_add.nativeRaster <- ggplot_add.grob
+#' @importFrom ggplot2 ggplot_add
+#' @export
+ggplot_add.gt_tbl <- function(object, plot, object_name) {
+  plot + wrap_table(object)
+}
 
 #' @importFrom grid is.grob
 #' @importFrom grDevices is.raster
@@ -33,6 +39,12 @@ get_patches <- function(plot) {
     patches <- plot$patches
     plot$patches <- NULL
     class(plot) <- setdiff(class(plot), 'patchwork')
+    if (is_free_plot(plot)) {
+      attr(plot, "patchwork_free_settings") <- NULL
+      if (is.null(attr(plot, "free_settings"))) {
+        class(plot) <- setdiff(class(plot), 'free_plot')
+      }
+    }
   } else {
     patches <- new_patchwork()
   }
@@ -77,8 +89,29 @@ add_patches.patchwork <- function(plot, patches) {
 new_patchwork <- function() {
   list(
     plots = list(),
-    layout = plot_layout(),
-    annotation = plot_annotation()
+    # We need to initialise layout and annotation with NULL values rather than waivers
+    layout = plot_layout(
+      ncol = NULL,
+      nrow = NULL,
+      byrow = NULL,
+      widths = NULL,
+      heights = NULL,
+      guides = NULL,
+      tag_level = NULL,
+      design = NULL,
+      axes = NULL,
+      axis_titles = NULL
+    ),
+    annotation = plot_annotation(
+      title = NULL,
+      subtitle = NULL,
+      caption = NULL,
+      tag_levels = NULL,
+      tag_prefix = NULL,
+      tag_suffix = NULL,
+      tag_sep = NULL,
+      theme = NULL
+    )
   )
 }
 #' @importFrom ggplot2 ggplot

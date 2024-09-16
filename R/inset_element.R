@@ -6,7 +6,7 @@
 #' `inset_element()` function provides a way to create such insets and gives you
 #' full control over placement.
 #'
-#' @param p A grob, ggplot, patchwork, formula, raster, or nativeRaster object
+#' @param p A grob, ggplot, patchwork, formula, raster, nativeRaster, or gt object
 #' to add as an inset
 #' @param left,bottom,right,top numerics or units giving the location of the
 #' outer bounds. If given as numerics they will be converted to `npc` units.
@@ -77,7 +77,7 @@ inset_element <- function(p, left, bottom, right, top, align_to = 'panel', on_to
     p <- wrap_elements(full = p, clip = clip)
   }
   clip <- if (clip) 'on' else 'off'
-  attr(p, 'settings') <- list(left = left, bottom = bottom, right = right,
+  attr(p, 'inset_settings') <- list(left = left, bottom = bottom, right = right,
                            top = top, align_to = align_to, on_top = on_top,
                            clip = clip, ignore_tag = ignore_tag)
   class(p) <- c('inset_patch', class(p))
@@ -91,4 +91,4 @@ print.inset_patch <- function(x, newpage = is.null(vp), vp = NULL, ...) {
 #' @export
 plot.inset_patch <- print.inset_patch
 #' @export
-has_tag.inset_patch <- function(x) !attr(x, 'settings')$ignore_tag
+has_tag.inset_patch <- function(x) !attr(x, 'inset_settings')$ignore_tag

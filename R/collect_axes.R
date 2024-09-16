@@ -24,46 +24,58 @@ collect_axis_titles <- function(gt, dir = "x", merge = TRUE) {
 
     # Simplify layout of grobs to matrix
     layout <- grob_layout(gt, c(idx, patch_index))
-    layout[layout %in% patch_index] <- NA # Remove patches
+    nested <- layout %in% patch_index
+    layout[nested] <- NA # Remove patches
 
     # Mark duplicated grobs
-    structure <- grob_id(gt$grobs, layout, byrow = dir == "x", merge = merge)
+    structure <- grob_id(gt$grobs, layout, byrow = dir == "x", merge = merge, unpack = TRUE)
 
     # If all title grobs are unique, there is nothing to collapse
     if (anyDuplicated(structure[!is.na(structure)]) == 0) {
       next
     }
 
+    structure[nested] <- 0
+
     # Identify 'run'-rectangles in the structure
-    runs <- rle_2d(structure, byrow = dir == "y")
-    runs <- runs[!is.na(runs$value), , drop = FALSE]
+    runs <- rle_2d(structure, byrow = dir == "y", ignore.na = TRUE)
+    runs <- runs[!is.na(runs$value) & runs$value != 0, , drop = FALSE]
 
-    # Find first grob in run
-    start_runs <- c("row_start", "col_start")
-    if (name == "xlab-b") start_runs[1] <- "row_end"
-    if (name == "ylab-r") start_runs[2] <- "col_end"
-    start_idx <- layout[as.matrix(runs[, start_runs])]
+    # Get all panels in each run and put the keeper first
+    panels <- lapply(seq_len(nrow(runs)), function(i) {
+      rows <- runs$row_start[i]:runs$row_end[i]
+      cols <- runs$col_start[i]:runs$col_end[i]
+      first <- switch(name,
+        "xlab-t" = layout[runs$row_start[i], cols],
+        "xlab-b" = layout[runs$row_end[i], cols],
+        "ylab-l" = layout[rows, runs$col_start[i]],
+        "ylab-r" = layout[rows, runs$col_end[i]]
+      )
+      first <- first[!is.na(first)][1]
+      panels <- as.vector(layout[rows , cols])
+      panels <- panels[!is.na(panels)]
+      unique(c(first, panels))
+    })
 
-    # Find last grob in run
-    end_runs <- c("row_end", "col_end")
-    if (name == "xlab-t") end_runs[1] <- "row_start"
-    if (name == "ylab-l") end_runs[2] <- "col_start"
-    end_idx <- layout[as.matrix(runs[, end_runs])]
+    title_grob <- vapply(panels, `[[`, numeric(1), 1)
 
     # Mark every non-start grob for deletion
-    delete <- c(delete, setdiff(idx, start_idx))
+    delete <- c(delete, setdiff(idx, title_grob))
 
-    if (all(start_idx == end_idx)) {
+    if ((dir == "x" && all(runs$col_start == runs$col_end)) ||
+        (dir == "y" && all(runs$row_start == runs$row_end))) {
       next
     }
 
     # Stretch titles over span
     if (dir == "y") {
-      gt$layout$b[start_idx] <- gt$layout$b[end_idx]
-      gt$layout$z[start_idx] <- max(gt$layout$z[idx])
+      gt$layout$t[title_grob] <- vapply(panels, function(i) min(gt$layout$t[i]), numeric(1))
+      gt$layout$b[title_grob] <- vapply(panels, function(i) max(gt$layout$b[i]), numeric(1))
+      gt$layout$z[title_grob] <- max(gt$layout$z[idx])
     } else {
-      gt$layout$r[start_idx] <- gt$layout$r[end_idx]
-      gt$layout$z[start_idx] <- max(gt$layout$z[idx])
+      gt$layout$l[title_grob] <- vapply(panels, function(i) min(gt$layout$l[i]), numeric(1))
+      gt$layout$r[title_grob] <- vapply(panels, function(i) max(gt$layout$r[i]), numeric(1))
+      gt$layout$z[title_grob] <- max(gt$layout$z[idx])
     }
   }
   delete_grobs(gt, delete)
@@ -243,24 +255,28 @@ is_zero <- function(x) {
 
 # Determine uniqueness of grobs
 #' @importFrom stats ave
-grob_id <- function(grobs, layout, byrow, merge = FALSE) {
+grob_id <- function(grobs, layout, byrow, merge = FALSE, unpack = FALSE) {
 
   # Hash the grobs to determine unique grobs
   valid <- !is.na(layout)
   idx  <- as.vector(layout)[valid]
-  hash <- vapply(grobs[idx], function(x) hash(unname_grob(x)), character(1))
+  hash <- vapply(grobs[idx], function(x) {
+    if (unpack && inherits(x, "gtable") && length(x$grobs) == 1) {
+      x <- x$grobs[[1]]
+    }
+    hash(unname_grob(x))
+  }, character(1))
 
   # For multi-cell grobs, compute an extra identifier
-  index <- if (byrow) col(layout) else row(layout)
-  min <- ave(index, layout, FUN = min)
-  max <- ave(index, layout, FUN = max)
-  identifier <- paste0(min, ";", max)
-  if (merge) {
-    identifier[min == max] <- ""
+  if (!merge) {
+    index <- if (byrow) col(layout) else row(layout)
+    min <- ave(index, layout, FUN = min)
+    max <- ave(index, layout, FUN = max)
+    identifier <- paste0(min, ";", max)
+    # Include the multi-cell identifier in the hash
+    hash <- paste0(hash, identifier[valid])
   }
 
-  # Include the multi-cell identifier in the hash
-  hash <- paste0(hash, identifier[valid])
   layout[valid] <- match(hash, unique(hash))
   layout
 }
@@ -332,7 +348,7 @@ on_load({
 # #> 2         1       2         3       3     2
 # #> 5         3       3         1       2     3
 # #> 6         3       3         3       3     1
-rle_2d <- function(m, byrow = FALSE) {
+rle_2d <- function(m, byrow = FALSE, ignore.na = FALSE) {
 
   n <- length(m)
 
@@ -366,13 +382,13 @@ rle_2d <- function(m, byrow = FALSE) {
   levels <- unique(as.vector(m))
 
   # Simplified case when there is just a single level
-  if (length(levels) == 1L) {
+  if ((ignore.na && sum(!is.na(levels)) == 1) || length(levels) == 1L) {
     ans <- data.frame(
       col_start = 1L,
       col_end   = dim[2],
       row_start = 1L,
       row_end   = dim[1],
-      value     = m[1]
+      value     = sort(levels, na.last = TRUE)[1]
     )
     return(rename(ans))
   }
