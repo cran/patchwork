@@ -7,21 +7,26 @@ expect_doppelganger <- vdiffr::expect_doppelganger
 # Predefined plots
 
 library(ggplot2)
-theme_set(theme_test() + theme(panel.grid = element_blank()))
 
-p1 <- ggplot(mtcars) +
-  geom_point(aes(mpg, disp)) +
-  ggtitle('Plot 1')
+if (packageVersion("ggplot2") >= "4.0.0") {
+  ggplot2::set_theme(ggplot2::theme_test() + ggplot2::theme(panel.grid = ggplot2::element_blank()))
+} else {
+  ggplot2::theme_set(ggplot2::theme_test() + ggplot2::theme(panel.grid = ggplot2::element_blank()))
+}
 
-p2 <- ggplot(mtcars) +
-  geom_boxplot(aes(gear, disp, group = gear)) +
-  ggtitle('Plot 2')
+p1 <- ggplot2::ggplot(mtcars) +
+  ggplot2::geom_point(ggplot2::aes(mpg, disp)) +
+  ggplot2::ggtitle('Plot 1')
 
-p3 <- ggplot(mtcars) +
-  geom_point(aes(hp, wt, colour = mpg)) +
-  ggtitle('Plot 3')
+p2 <- ggplot2::ggplot(mtcars) +
+  ggplot2::geom_boxplot(ggplot2::aes(gear, disp, group = gear)) +
+  ggplot2::ggtitle('Plot 2')
 
-p4 <- ggplot(mtcars) +
-  geom_bar(aes(gear)) +
-  facet_wrap(~cyl) +
-  ggtitle('Plot 4')
+p3 <- ggplot2::ggplot(mtcars) +
+  ggplot2::geom_point(ggplot2::aes(hp, wt, colour = mpg)) +
+  ggplot2::ggtitle('Plot 3')
+
+p4 <- ggplot2::ggplot(mtcars) +
+  ggplot2::geom_bar(ggplot2::aes(gear)) +
+  ggplot2::facet_wrap(~cyl) +
+  ggplot2::ggtitle('Plot 4')

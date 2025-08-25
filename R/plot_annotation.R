@@ -86,19 +86,24 @@ plot_annotation <- function(title = waiver(), subtitle = waiver(), caption = wai
     theme = th
   ), class = 'plot_annotation')
 }
-default_annotation <- plot_annotation(
-  title = NULL,
-  subtitle = NULL,
-  caption = NULL,
-  tag_levels = character(),
-  tag_prefix = '',
-  tag_suffix = '',
-  tag_sep = '',
-  theme = NULL
-)
+
+default_annotation <- NULL
+on_load({
+  default_annotation <- plot_annotation(
+    title = NULL,
+    subtitle = NULL,
+    caption = NULL,
+    tag_levels = character(),
+    tag_prefix = '',
+    tag_suffix = '',
+    tag_sep = '',
+    theme = NULL
+  )
+})
+
 #' @importFrom utils modifyList
 #' @export
-ggplot_add.plot_annotation <- function(object, plot, object_name) {
+ggplot_add.plot_annotation <- function(object, plot, ...) {
   plot <- as_patchwork(plot)
   if (is.null(object$theme)) {
     plot$patches$annotation$theme <- NULL
@@ -110,7 +115,7 @@ ggplot_add.plot_annotation <- function(object, plot, object_name) {
   plot$patches$annotation[names(do_change)] <- do_change
   plot
 }
-#' @importFrom ggplot2 is.ggplot labs
+#' @importFrom ggplot2 is_ggplot labs
 recurse_tags <- function(x, levels, prefix, suffix, sep, offset = 1) {
   if (length(levels) == 0) return(list(patches = x, tab_ind = offset))
   level <- get_level(levels[1])

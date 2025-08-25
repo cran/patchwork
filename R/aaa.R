@@ -45,4 +45,6 @@ check_object <- function(x,
   )
 }
 
-is_waiver <- function(x) inherits(x, "waiver")
+is_waiver <- function (x) {
+  inherits(x, "waiver")
+}
